@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>Mapa Londres 2026 — Viaje familiar</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#f5f2eb;color:#1a1a2e;height:100vh;display:flex;flex-direction:column}
+#header{background:#1C3F72;padding:10px 14px;border-bottom:2px solid #FFD700;flex-shrink:0}
+#header h1{font-size:15px;font-weight:700;color:#FFD700;margin:0 0 4px}
+#header p{font-size:11px;color:#cce;margin:0}
+#map{flex:1;min-height:0}
+#legend{background:#1C3F72;padding:8px 14px;border-top:1px solid #2a5090;flex-shrink:0;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:10px;color:white}
+.leg{display:flex;align-items:center;gap:4px}
+.leg-dot{width:10px;height:10px;border-radius:50%;border:2px solid white;flex-shrink:0}
+.leg-line{width:18px;height:4px;border-radius:2px}
+
+/* Custom popup style */
+.leaflet-popup-content-wrapper{border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+.leaflet-popup-content{margin:10px 14px;font-size:13px;line-height:1.5}
+.leaflet-popup-content h3{margin:0 0 4px;font-size:14px;color:#1a1a2e}
+.leaflet-popup-content .day{font-size:10px;font-weight:700;color:#FFD700;background:#1a1a2e;padding:1px 6px;border-radius:3px;display:inline-block;margin-bottom:4px}
+.leaflet-popup-content .detail{font-size:11px;color:#555;margin-top:2px}
+.leaflet-popup-content .ticket{font-size:10px;color:#007229;font-weight:700}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🗺️ MAPA VIAJE LONDRES — Agosto 2026</h1>
+  <p>Toca cualquier punto para ver detalles · Pellizca para hacer zoom · Hotel en estrella dorada</p>
+</div>
+
+<div id="map"></div>
+
+<div id="legend">
+  <div class="leg"><div class="leg-dot" style="background:#FFD700;border-color:#1a1a2e"></div><span>Hotel</span></div>
+  <div class="leg"><div class="leg-dot" style="background:#E32017"></div><span>Atracciones</span></div>
+  <div class="leg"><div class="leg-dot" style="background:#003688"></div><span>Vistas / miradores</span></div>
+  <div class="leg"><div class="leg-dot" style="background:#007229"></div><span>Museos (gratis)</span></div>
+  <div class="leg"><div class="leg-dot" style="background:#FF8C00"></div><span>Tours</span></div>
+  <div class="leg"><div class="leg-dot" style="background:#9B59B6"></div><span>Restaurantes</span></div>
+  <div class="leg"><div class="leg-dot" style="background:#00AFAD"></div><span>Tiendas</span></div>
+  <div class="leg"><div class="leg-line" style="background:rgba(255,200,0,0.5)"></div><span>Zonas de paseo</span></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// Inicializar mapa centrado en el hotel
+const map = L.map('map', {
+  center: [51.5072, -0.1241],
+  zoom: 14,
+  zoomControl: true,
+  attributionControl: true
+});
+
+// Tiles estilo oscuro elegante
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 20
+}).addTo(map);
+
+// ── ICONOS PERSONALIZADOS ──────────────────────────────────────────────────
+function makeIcon(color, emoji, size=32) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${size}px;height:${size}px;border-radius:50% 50% 50% 0;
+      background:${color};border:3px solid white;
+      display:flex;align-items:center;justify-content:center;
+      transform:rotate(-45deg);box-shadow:0 3px 10px rgba(0,0,0,0.5);
+      font-size:${size*0.45}px">
+      <span style="transform:rotate(45deg)">${emoji}</span>
+    </div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size],
+    popupAnchor: [0, -size]
+  });
+}
+
+function makeStarIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:44px;height:44px;border-radius:50%;
+      background:#FFD700;border:3px solid #1a1a2e;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 0 20px rgba(255,215,0,0.8);
+      font-size:22px">⭐</div>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+    popupAnchor: [0, -22]
+  });
+}
+
+const icons = {
+  hotel:   makeStarIcon(),
+  red:     makeIcon('#E32017','🏛️'),
+  blue:    makeIcon('#003688','👁️'),
+  green:   makeIcon('#007229','🏛️'),
+  orange:  makeIcon('#FF8C00','🎭'),
+  purple:  makeIcon('#9B59B6','🍽️'),
+  teal:    makeIcon('#00AFAD','🛍️'),
+  yellow:  makeIcon('#FFD700','🎬'),
+};
+
+// ── PUNTOS DEL MAPA ────────────────────────────────────────────────────────
+const places = [
+
+  // ── HOTEL ──
+  { lat:51.5072, lng:-0.1241, icon:'hotel', name:'🏨 Club Quarters Hotel Trafalgar Square',
+    day:'BASE · 8 Northumberland Avenue',
+    detail:'Vuestro hotel toda la semana. A 5 min de Trafalgar Square, Charing Cross metro y Embankment.',
+    ticket:'' },
+
+  // ── LUNES 17 ──
+  { lat:51.5080, lng:-0.1281, icon:'orange', name:'Trafalgar Square',
+    day:'LUN 17 — Free Tour Westminster (15:00h)',
+    detail:'Punto de paseo y de llegada al free tour. Nelson\'s Column y National Gallery.',
+    ticket:'Free Tour sale del Café in the Crypt, St Martin-in-the-Fields' },
+
+  { lat:51.5091, lng:-0.1267, icon:'orange', name:'Café in the Crypt — Punto de encuentro Free Tour',
+    day:'LUN 17 — 15:00h · Guía con paraguas BLANCO',
+    detail:'Iglesia de St Martin-in-the-Fields, entrada circular de cristal. Llegar 10 min antes.',
+    ticket:'Reserva Civitatis A39750061 · 2 adultos + 1 niño' },
+
+  { lat:51.5007, lng:-0.1246, icon:'red', name:'Big Ben (Elizabeth Tower)',
+    day:'LUN 17 — Free Tour Westminster',
+    detail:'Incluido en el recorrido del free tour de la tarde.',
+    ticket:'' },
+
+  { lat:51.4994, lng:-0.1248, icon:'red', name:'Palacio de Westminster',
+    day:'LUN 17 — Free Tour Westminster',
+    detail:'Casas del Parlamento. Se ve desde Westminster Bridge.',
+    ticket:'' },
+
+  { lat:51.4994, lng:-0.1275, icon:'red', name:'Westminster Abbey',
+    day:'LUN 17 — Free Tour Westminster',
+    detail:'Fachada gótica incluida en el recorrido.',
+    ticket:'' },
+
+  { lat:51.5014, lng:-0.1419, icon:'red', name:'Buckingham Palace',
+    day:'LUN 17 y MIÉ 19 — Free Tour + Cambio de Guardia',
+    detail:'Lunes: en el free tour. Miércoles: Cambio de Guardia a las 11:00h. Llegar antes de las 10:00.',
+    ticket:'Gratis · Exterior' },
+
+  { lat:51.5024, lng:-0.1343, icon:'green', name:"St James's Park",
+    day:'LUN 17 y MIÉ 19',
+    detail:'Parque real entre Buckingham y Westminster. Estanque con pelícanos. Paso del free tour y del Cambio de Guardia.',
+    ticket:'Gratis' },
+
+  { lat:51.5055, lng:-0.1167, icon:'orange', name:'Southbank / Queen\'s Walk',
+    day:'LUN 17 — Tarde',
+    detail:'Paseo por la ribera sur del Támesis desde Westminster Bridge hasta London Bridge. Vistas al Parlamento.',
+    ticket:'Gratis' },
+
+  // ── MARTES 18 ──
+  { lat:51.6913, lng:-0.4136, icon:'yellow', name:'Warner Bros. Studio Tour — Harry Potter',
+    day:'MAR 18 — 10:30h · ¡Llegar a las 10:10h!',
+    detail:'Shuttle desde Watford Junction. Llevar entradas en el móvil. Bolsas registradas en la entrada.',
+    ticket:'✅ Booking Ref. 7154757 · 2 adultos + 1 niño' },
+
+  { lat:51.5194, lng:-0.1269, icon:'green', name:'British Museum',
+    day:'MAR 18 — 15:30h',
+    detail:'Rosetta Stone, momias egipcias, sala griega. Cierra a las 17:00. Entrada por Great Russell St.',
+    ticket:'✅ Order 10154860 · 15:30h · 2 adultos + 1 niño' },
+
+  { lat:51.5098, lng:-0.1339, icon:'purple', name:'Hard Rock Cafe Piccadilly',
+    day:'MAR 18 — Cena ~18:00h',
+    detail:'225-229 Piccadilly, Criterion Building. Burgers, ribs, legendary wings. Reservar en hardrockcafe.com.',
+    ticket:'~£30-35pp · Cierra 22:00' },
+
+  // ── MIÉRCOLES 19 ──
+  { lat:51.4967, lng:-0.1760, icon:'green', name:'Natural History Museum',
+    day:'MIÉ 19 — 14:30h',
+    detail:'Diplodocus en el hall de entrada, galería de dinosaurios. Cierra a las 18:00. South Kensington.',
+    ticket:'✅ Order 7114168 · 14:30h · 2 adultos + 1 niño' },
+
+  { lat:51.4978, lng:-0.1746, icon:'green', name:'Science Museum',
+    day:'MIÉ 19 — 16:00h',
+    detail:'Puerta con puerta con el NHM. Cierra 18:00. Espacio, tecnología, medicina interactiva.',
+    ticket:'✅ Ticket #16689995 · 16:00h · 2 adultos + 1 niño' },
+
+  { lat:51.5073, lng:-0.1657, icon:'green', name:'Hyde Park + Kensington Gardens',
+    day:'MIÉ 19 — Mañana · Ruta en bici Santander Cycles',
+    detail:'Day Pass ~£3.50/bici. Coger bicis en Hyde Park Corner o Lancaster Gate. Devolver cerca de South Ken.',
+    ticket:'Gratis (bici ~£3.50/persona)' },
+
+  { lat:51.5158, lng:-0.1298, icon:'orange', name:'Outernet London',
+    day:'MIÉ 19 — Tarde/noche',
+    detail:'Denmark Street. Pantallas inmersivas gigantes, experiencias multimedia gratuitas. Abre hasta las 23:00.',
+    ticket:'Gratis' },
+
+  // ── JUEVES 20 ──
+  { lat:51.5081, lng:-0.0761, icon:'red', name:'Tower of London',
+    day:'JUE 20 — 09:30h · ¡Llegar a las 09:15h!',
+    detail:'Joyas de la Corona, Beefeaters, Torre Blanca. Llevar entradas. Audio guías incluidas en la reserva.',
+    ticket:'✅ Ref. DVOIK33V7V5PZ · 09:30h · 1 niño + 1 discapacitado + 1 acompañante' },
+
+  { lat:51.5055, lng:-0.0754, icon:'red', name:'Tower Bridge',
+    day:'JUE 20 — ~11:30h',
+    detail:'5 min a pie desde Tower of London. Interior + pasarelas de cristal a 43m de altura. Imprescindible.',
+    ticket:'⚠ Entrada pendiente reservar (~£11.60 adulto / £5.80 niño)' },
+
+  { lat:51.5148, lng:-0.0815, icon:'blue', name:'Horizon 22 — 22 Bishopsgate',
+    day:'JUE 20 — 12:30h · 255m de altura',
+    detail:'Piso 58. La plataforma panorámica gratuita más alta de Londres. 300° de vistas. Llevar DNI. Seguridad tipo aeropuerto.',
+    ticket:'✅ Order# ZQQ-TKH-7H9B · 12:30h · 2 adultos + 1 niño' },
+
+  { lat:51.5055, lng:-0.0908, icon:'purple', name:'Borough Market',
+    day:'JUE 20 — Comida ~13:45h',
+    detail:'Cruzar Tower Bridge hacia el sur → Borough Market (abre hasta ~17:00 jueves). Street food excelente.',
+    ticket:'Gratis · Comida ~£12-18pp en el mercado' },
+
+  { lat:51.5111, lng:-0.0834, icon:'blue', name:'Sky Garden — 20 Fenchurch St (Walkie-Talkie)',
+    day:'JUE 20 — 15:00h · 1 hora de visita',
+    detail:'Jardines tropicales con vistas 360°. Llevar DNI. Llegad juntos al lobby. Sky Garden bars son cashless.',
+    ticket:'✅ Ref. 20260727-69854240 · 15:00h · Mónica + Daniel + Feliu' },
+
+  { lat:51.5117, lng:-0.1228, icon:'teal', name:'Covent Garden',
+    day:'JUE 20 — Tarde · Tiendas y artistas',
+    detail:'Mercado cubierto, artistas callejeros, restaurantes. Cerca de LEGO Store y M&M\'s World.',
+    ticket:'Gratis entrar' },
+
+  { lat:51.5121, lng:-0.1241, icon:'teal', name:'LEGO Store Covent Garden',
+    day:'JUE 20 — Tarde',
+    detail:'8 min a pie desde Leicester Square. El LEGO Store más grande de Europa.',
+    ticket:'' },
+
+  { lat:51.5107, lng:-0.1299, icon:'teal', name:"M&M's World London",
+    day:'JUE 20 — Tarde',
+    detail:'1 Leicester Square. Cuatro plantas de M&M\'s. El niño lo va a flipar.',
+    ticket:'' },
+
+  { lat:51.5130, lng:-0.1411, icon:'teal', name:'Hamleys (Regent Street)',
+    day:'JUE 20 — Tarde',
+    detail:'188-196 Regent Street. La juguetería más famosa del mundo. 7 plantas de juguetes.',
+    ticket:'' },
+
+  // ── VIERNES 21 ──
+  { lat:51.5171, lng:-0.2041, icon:'orange', name:'Notting Hill + Portobello Road Market',
+    day:'VIE 21 — Mañana',
+    detail:'Casas de colores, antigüedades. Mercado de antigüedades abre viernes desde las 9:00. Muy fotogénico.',
+    ticket:'Gratis' },
+
+  { lat:51.5415, lng:-0.1426, icon:'orange', name:'Camden Town Markets',
+    day:'VIE 21 — Mañana/mediodía',
+    detail:'Mercados de Camden, street food de todo el mundo, mural Amy Winehouse, el establo.',
+    ticket:'Gratis entrar' },
+
+  { lat:51.4994, lng:-0.1630, icon:'teal', name:'Harrods',
+    day:'VIE 21 — ~15:30h',
+    detail:'87 Brompton Road, Knightsbridge. El food hall de la planta baja es imprescindible.',
+    ticket:'' },
+
+  { lat:51.5010, lng:-0.1128, icon:'orange', name:'Leake Street Arches (arte urbano)',
+    day:'VIE 21 — ~17:00h',
+    detail:'Túnel de grafiti bajo la estación de Waterloo. Gratuito, siempre abierto. 5 min a pie de Waterloo.',
+    ticket:'Gratis' },
+
+  { lat:51.5132, lng:-0.1295, icon:'orange', name:'Tour Nocturno — Cambridge Circus (Palace Theatre)',
+    day:'VIE 21 — 19:00h · ¡Puntual!',
+    detail:'Punto de encuentro: entrada principal Palace Theatre, Cambridge Circus, London W1D 5AY. Guía con PARAGUAS NARANJA o placa Tour Londres.',
+    ticket:'✅ Booking 357782243 · 19:00h · 2 adultos + 1 niño' },
+
+  // ── SÁBADO 22 ──
+  { lat:51.5549, lng:-0.1084, icon:'red', name:'Emirates Stadium — Arsenal Tour',
+    day:'SÁB 22 — 09:30h',
+    detail:'Visita guiada al estadio + museo. Tours cada 30 min desde 9:30 los sábados.',
+    ticket:'⚠ Pendiente reservar · arsenal.com · ~£30 adulto / £18 niño' },
+
+  { lat:51.5237, lng:-0.1110, icon:'red', name:'The Postal Museum',
+    day:'SÁB 22 — ~11:45h',
+    detail:'Mount Pleasant, EC1A 1BB. Mail Rail subterráneo muy recomendable para el niño. 15 min a pie desde King\'s Cross.',
+    ticket:'~£18 adulto / £10 niño' },
+
+  { lat:51.4816, lng:-0.1910, icon:'red', name:'Stamford Bridge — Chelsea FC',
+    day:'SÁB 22 — ~14:00h',
+    detail:'Fulham Road. Exterior + tienda oficial. Tour interior opcional si hay disponibilidad.',
+    ticket:'Exterior gratis' },
+
+  { lat:51.5007, lng:-0.0183, icon:'red', name:'IFS Cloud Cable Car (Royal Docks)',
+    day:'SÁB 22 — ~15:30h',
+    detail:'Teleférico sobre el Támesis. Unas 15 min de trayecto. Vistas espectaculares del este de Londres.',
+    ticket:'⚠ ~£5/persona en app TfL · Se paga allí' },
+
+  // ── RESTAURANTES ──
+  { lat:51.5065, lng:-0.1270, icon:'purple', name:'Old Shades Pub',
+    day:'LUN 17 — Comida rápida',
+    detail:'37 Whitehall (7 min del hotel). Pub victoriano histórico. Fish & chips y sticky toffee pudding. 4.7★',
+    ticket:'~£20-25pp' },
+
+  { lat:51.5094, lng:-0.1328, icon:'purple', name:'Fallow Restaurant',
+    day:'LUN 17 — Cena (alternativa Hard Rock)',
+    detail:'52 Haymarket. Cocina británica moderna y sostenible. Mushroom parfait, beef short rib. 4.7★',
+    ticket:'~£35-40pp · RESERVAR: fallow.restaurant' },
+
+  { lat:51.5125, lng:-0.1268, icon:'purple', name:'Dishoom Covent Garden',
+    day:'MAR 18 o MIÉ 19 — Cena',
+    detail:'12 Upper St Martin\'s Lane. Cafés iraníes de Bombay. Black dal y bacon naan legendarios. 4.7★ 29.000 reseñas',
+    ticket:'~£25-30pp · Sin reserva grupos pequeños fuera hora punta' },
+
+  { lat:51.4929, lng:-0.1813, icon:'purple', name:'The Hereford Arms',
+    day:'MIÉ 19 — Comida previa museos',
+    detail:'127 Gloucester Rd, South Kensington (5 min del NHM). Pub victoriano, fish & chips crujientes. 4.4★',
+    ticket:'~£18-22pp · Abre desde 11:00' },
+
+  { lat:51.5073, lng:-0.0928, icon:'purple', name:'The Anchor Bankside + Borough Market',
+    day:'JUE 20 — Comida',
+    detail:'34 Park St, junto al Borough Market. Pub histórico (1676). Fish & chips, Sunday roast. 4.2★',
+    ticket:'~£22-28pp o mercado ~£12-15pp' },
+
+  { lat:51.5371, lng:-0.1412, icon:'purple', name:'The Blues Kitchen Camden',
+    day:'VIE 21 — Comida en Camden',
+    detail:'111 Camden High St. BBQ americano, música en directo incluso al mediodía. Fried chicken, ribs. 4.4★',
+    ticket:'~£20-25pp' },
+
+  { lat:51.5153, lng:-0.1376, icon:'purple', name:'Golden Union — Fish & Chips',
+    day:'VIE 21 — Cena tras tour nocturno',
+    detail:'38 Poland St, Soho. Mejor fish & chips de la zona central de Londres. Abre hasta las 22:00. 4.4★',
+    ticket:'~£18-22pp' },
+
+  { lat:51.4938, lng:-0.1322, icon:'purple', name:'Regency Café — Full English',
+    day:'SÁB 22 — Desayuno temprano',
+    detail:'17-19 Regency St, Westminster. El desayuno inglés más legendario de Londres. 4.7★. Abre 7:00h',
+    ticket:'~£8-12pp · Llegar antes de las 9:00' },
+
+  { lat:51.4944, lng:-0.1726, icon:'purple', name:'Philippe Conticini',
+    day:'SÁB 22 / DOM 23 — Cena / Desayuno',
+    detail:'South Kensington. Repostería francesa de autor. El cruasán gigante de mantequilla es el broche del viaje.',
+    ticket:'~£8-15pp' },
+
+  { lat:51.5113, lng:-0.1440, icon:'purple', name:'Dez Amore (Mayfair)',
+    day:'JUE 20 — Cena',
+    detail:'Zona Mayfair, cerca de Regent Street y Hamleys.',
+    ticket:'~£30-40pp' },
+
+  // ── ZONAS DE PASEO / EMBANKMENT ──
+  { lat:51.5074, lng:-0.1224, icon:'green', name:'Victoria Embankment',
+    day:'Todos los días — Paseo desde el hotel',
+    detail:'La orilla norte del Támesis. 5 min del hotel. Golden Jubilee Bridge, vistas al London Eye y al Parlamento.',
+    ticket:'Gratis · Paso habitual' },
+
+  { lat:51.5009, lng:-0.1224, icon:'green', name:'Westminster Bridge',
+    day:'LUN 17 — Tarde',
+    detail:'Cruzar a pie hacia el Southbank. Mejores vistas del Big Ben y del Parlamento desde el puente.',
+    ticket:'Gratis' },
+
+  { lat:51.5033, lng:-0.1195, icon:'red', name:'London Eye',
+    day:'Visible desde Southbank y Westminster Bridge',
+    detail:'No está en el planning pero se ve espectacular desde el Southbank y desde el puente.',
+    ticket:'' },
+
+  { lat:51.5101, lng:-0.1340, icon:'orange', name:'Piccadilly Circus',
+    day:'Varios días — Paso habitual',
+    detail:'Punto de referencia central. Pantallas publicitarias, estatua de Eros. Paso natural entre el West End y el hotel.',
+    ticket:'' },
+
+  { lat:51.5080, lng:-0.1281, icon:'orange', name:'Chinatown — Gerrard Street',
+    day:'LUN 17 — Cena · Zona de paso varios días',
+    detail:'2 min desde Leicester Square. Restaurantes de todo tipo, faroles rojos, ambiente animado por la noche.',
+    ticket:'' },
+
+  { lat:51.5071, lng:-0.0754, icon:'green', name:'Thames Path — Tower Bridge / Southbank este',
+    day:'JUE 20 — Tarde (Borough Market → Sky Garden)',
+    detail:'Cruzar Tower Bridge hacia el sur → Borough Market → paseo ribera sur hasta Sky Garden. Todo a pie.',
+    ticket:'Gratis' },
+
+];
+
+// ── ZONAS DE PASEO (polígonos sombreados) ────────────────────────────────
+const walkingZones = [
+  // Southbank/Queen's Walk
+  { name: 'Southbank / Queen\'s Walk', color: '#FFD700',
+    coords: [[51.5072,-0.1210],[51.5055,-0.1167],[51.5040,-0.1100],[51.5033,-0.0950],[51.5020,-0.0900],[51.5000,-0.0890],[51.4990,-0.0920],[51.5005,-0.0960],[51.5020,-0.1050],[51.5038,-0.1150],[51.5055,-0.1210],[51.5072,-0.1210]] },
+
+  // Regent Street / Oxford Street / West End tiendas
+  { name: 'West End — Tiendas (Regent St · Oxford St · Carnaby)', color: '#00AFAD',
+    coords: [[51.5160,-0.1450],[51.5200,-0.1350],[51.5185,-0.1270],[51.5155,-0.1230],[51.5130,-0.1260],[51.5115,-0.1350],[51.5130,-0.1430],[51.5160,-0.1450]] },
+
+  // Notting Hill / Portobello
+  { name: 'Notting Hill & Portobello Road', color: '#E32017',
+    coords: [[51.5190,-0.2100],[51.5200,-0.1970],[51.5160,-0.1940],[51.5130,-0.1980],[51.5140,-0.2070],[51.5170,-0.2110],[51.5190,-0.2100]] },
+
+  // Camden Town markets
+  { name: 'Camden Markets', color: '#9B59B6',
+    coords: [[51.5440,-0.1480],[51.5460,-0.1380],[51.5410,-0.1360],[51.5390,-0.1420],[51.5410,-0.1490],[51.5440,-0.1480]] },
+
+  // South Kensington (museos)
+  { name: 'South Kensington — Zona Museos', color: '#007229',
+    coords: [[51.5010,-0.1800],[51.5010,-0.1700],[51.4970,-0.1680],[51.4950,-0.1720],[51.4960,-0.1810],[51.5010,-0.1800]] },
+
+  // City / Sky Garden / Horizon 22 / Borough Market
+  { name: 'The City — Tower Bridge · Horizon 22 · Sky Garden · Borough Market', color: '#003688',
+    coords: [[51.5160,-0.0870],[51.5160,-0.0750],[51.5060,-0.0720],[51.5000,-0.0850],[51.5020,-0.0950],[51.5070,-0.0960],[51.5100,-0.0890],[51.5160,-0.0870]] },
+
+  // Hyde Park paseo
+  { name: 'Hyde Park & Kensington Gardens (ruta bici)', color: '#007229',
+    coords: [[51.5150,-0.1740],[51.5130,-0.1600],[51.5060,-0.1590],[51.4990,-0.1650],[51.5020,-0.1790],[51.5090,-0.1810],[51.5150,-0.1740]] },
+];
+
+// ── DIBUJA ZONAS DE PASEO ─────────────────────────────────────────────────
+walkingZones.forEach(zone => {
+  L.polygon(zone.coords, {
+    color: zone.color,
+    weight: 2,
+    opacity: 0.8,
+    fillColor: zone.color,
+    fillOpacity: 0.12,
+    dashArray: '6,4'
+  }).addTo(map).bindTooltip(`🚶 ${zone.name}`, {
+    permanent: false, direction: 'center',
+    className: 'leaflet-tooltip'
+  });
+});
+
+// ── DIBUJA MARCADORES ─────────────────────────────────────────────────────
+places.forEach(p => {
+  const marker = L.marker([p.lat, p.lng], { icon: icons[p.icon] }).addTo(map);
+  const ticketHtml = p.ticket ? `<div class="ticket">🎟 ${p.ticket}</div>` : '';
+  marker.bindPopup(`
+    <h3>${p.name}</h3>
+    <span class="day">${p.day}</span>
+    <p class="detail">${p.detail}</p>
+    ${ticketHtml}
+  `, { maxWidth: 280 });
+});
+
+// ── RECORRIDO DEL HOTEL AL SOUTHBANK (línea punteada) ─────────────────────
+const hotelRoute = [
+  [51.5072,-0.1241],
+  [51.5080,-0.1220],
+  [51.5072,-0.1224], // Embankment
+  [51.5060,-0.1215],
+  [51.5045,-0.1205],
+  [51.5009,-0.1224], // Westminster Bridge
+];
+L.polyline(hotelRoute, {
+  color: '#FFD700', weight: 3, opacity: 0.6, dashArray: '8,6'
+}).addTo(map).bindTooltip('🚶 Hotel → Westminster Bridge (15\' a pie)', {direction:'right'});
+
+// ── ESCALA Y ATRIBUCIÓN ───────────────────────────────────────────────────
+L.control.scale({ metric: true, imperial: false }).addTo(map);
+
+// ── VISTA INICIAL ─────────────────────────────────────────────────────────
+// Ajustar a todos los puntos
+const allCoords = places.map(p => [p.lat, p.lng]);
+// Añadir puntos lejanos (Arsenal, Cable Car)
+map.fitBounds([
+  [51.48, -0.22],  // SW: Chelsea/South Ken
+  [51.56, -0.07],  // NE: Arsenal/Tower
+]);
+
+</script>
+</body>
+</html>
